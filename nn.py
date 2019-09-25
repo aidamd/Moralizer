@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 from nltk import tokenize as nltk_token
 import operator
+import re
 
 
 def generator(Z, hidden_size, vocab_len, label):
@@ -15,8 +16,6 @@ def discriminator(X_real, X_fake, filter_sizes, num_filters, keep_ratio, scope):
     cnn_real = cnn(X_real, filter_sizes, num_filters, keep_ratio, scope)
     cnn_fake = cnn(X_fake, filter_sizes, num_filters, keep_ratio, scope, reuse=True)
 
-    print(cnn_real.shape)
-
     disc_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
         labels=tf.ones_like(cnn_real), logits=cnn_real)) + \
              tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
@@ -24,19 +23,6 @@ def discriminator(X_real, X_fake, filter_sizes, num_filters, keep_ratio, scope):
     gen_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
         labels=tf.ones_like(cnn_real), logits=cnn_fake))
     return disc_loss, gen_loss
-
-
-def build_embedding(vocab_len, embedding_size, pretrain):
-    if pretrain:
-        embedding_placeholder = tf.Variable(tf.constant(0.0, shape=[vocab_len, embedding_size]),
-                                 trainable=False, name="W")
-
-    else:
-        embedding_placeholder = tf.get_variable("embedding",
-                                                initializer=tf.random_uniform(
-                                                    [vocab_len, embedding_size], -1, 1),
-                                                dtype=tf.float32)
-    return embedding_placeholder
 
 def cnn(input, filter_sizes, num_filters, keep_ratio, scope, padding="VALID", reuse=False):
     dim = input.get_shape().as_list()[-1]
@@ -126,13 +112,17 @@ def batch_to_info(batch, pad_idx, eos_idx, go_idx, target=False):
 def tokenize_data(corpus, col):
     #sent_tokenizer = toks[self.params["tokenize"]]
     for idx, row in corpus.iterrows():
-        corpus.at[idx, col] = nltk_token.WordPunctTokenizer().tokenize(row[col].lower())
+        corpus.at[idx, col] = nltk_token.WordPunctTokenizer().tokenize(clean(row[col]))
     return corpus
+
+def clean(sent):
+    return re.sub(r'[^a-zA-Z ]', r'', sent.lower())
+
 
 def remove_empty(corpus, col):
     drop = list()
     for i, row in corpus.iterrows():
-        if row[col] == "":
+        if row[col] == "" or len(row[col]) < 4 or len(row[col]) > 100:
             drop.append(i)
     return corpus.dropna().drop(drop)
 
@@ -163,3 +153,18 @@ def tokens_to_ids(corpus, vocab):
             except:
                 corpus[i][j] = unk_idx
     return corpus
+
+def load_embedding(vocabulary, file_path, embedding_size):
+    embeddings = np.random.randn(len(vocabulary), embedding_size)
+    found = 0
+    with open(file_path, "r") as f:
+        for line in f:
+            split = line.split()
+            idx = len(split) - embedding_size
+            vocab = "".join(split[:idx])
+            if vocab in vocabulary:
+                embeddings[vocabulary.index(vocab)] = np.array(split[idx:], dtype=np.float32)
+                found += 1
+    print("Found {}/{} of vocab in word embeddings".
+          format(found, len(vocabulary)))
+    return embeddings

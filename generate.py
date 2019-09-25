@@ -12,30 +12,20 @@ param_path = os.environ['PARAMS']
 source_path = os.environ['SOURCE_PATH']
 """
 
-#source_path = "/home/aida/neural_profiles_datadir/data/Media/sentiment.pkl"
-#param_path = "/home/aida/Projects/Moralizer/params.json"
-
 def oversample(source_df, params):
-    #print("Loading", source_path)
-    #source_df = pd.read_pickle(source_path)
-    missing_indices = list()
-
     print(source_df.shape[0], "datapoints")
+
+    source_df = tokenize_data(source_df, params["text_col"])
     source_df = remove_empty(source_df, params["text_col"])
     print(source_df.shape[0], "datapoints after removing empty strings")
-    source_df = tokenize_data(source_df, params["text_col"])
     df_text = source_df[params["text_col"]].values.tolist()
     vocab = learn_vocab(df_text, params["vocab_size"])
 
-    #domain = params["generate_domain"]
-    #target = params["generate_target"]
-
-    #domain_df = source_df.loc[source_df[domain] == params["domain_labels"]][params["text_col"]].tolist()
-    #target_df = source_df.loc[source_df[target] == params["target_labels"]][params["text_col"]].tolist()
-
     feature = params["transfer"]
     domain_df = source_df.loc[source_df[feature] == 1][params["text_col"]].tolist()
+    domain_df = sorted(domain_df, key=len)
     target_df = source_df.loc[source_df[feature] == 0][params["text_col"]].tolist()
+    target_df = sorted(target_df, key=len)
 
     domain_df = tokens_to_ids(domain_df, vocab)
     target_df = tokens_to_ids(target_df, vocab)
@@ -61,5 +51,5 @@ if __name__ == '__main__':
     except Exception:
         print("Wrong params file")
         exit(1)
-    globals()[params["generate"]](data, params)
+    oversample(data, params)
 
