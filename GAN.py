@@ -74,14 +74,21 @@ class GAN():
         init_y0 = tf.concat([self.y0_real, tf.zeros([batch_size, self.z_size])], 1)
 
         # encoder
-        enc_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=int(self.hidden_size / 2), state_is_tuple=False)
-        cell_drop = tf.nn.rnn_cell.DropoutWrapper(enc_cell, input_keep_prob=self.keep_ratio)
+        enc_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=int(self.hidden_size / 2),
+                                                state_is_tuple=False)
+        cell_drop = tf.nn.rnn_cell.DropoutWrapper(enc_cell,
+                                                  input_keep_prob=self.keep_ratio)
         self.enc_network = tf.contrib.rnn.MultiRNNCell([cell_drop] * self.num_layers, state_is_tuple=False)
 
         # generator
-        gen_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=int(self.hidden_size / 2), state_is_tuple=False, reuse=False)
+        gen_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=int(self.hidden_size / 2), state_is_tuple=False,
+                                                reuse=False)
         gen_cell_drop = tf.nn.rnn_cell.DropoutWrapper(gen_cell, input_keep_prob=self.keep_ratio)
         self.gen_network = tf.nn.rnn_cell.MultiRNNCell([gen_cell_drop] * self.num_layers, state_is_tuple=False)
+
+        trans_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=int(self.hidden_size / 2),
+                                                state_is_tuple=False,
+                                                reuse=False)
 
         # making the encoding with the labels as the initialize state
         _, self.Z1 = tf.nn.dynamic_rnn(self.enc_network, self.embed1, dtype=tf.float32,
@@ -137,9 +144,9 @@ class GAN():
         projection_layer = tf.layers.Dense(len(self.vocab), use_bias=False)
 
         generator0 = tf.contrib.seq2seq.BasicDecoder(
-            gen_cell, helper, fake_Z1, output_layer=projection_layer)
+            trans_cell, helper, fake_Z1, output_layer=projection_layer)
         generator1 = tf.contrib.seq2seq.BasicDecoder(
-            gen_cell, helper, fake_Z0, output_layer=projection_layer)
+            trans_cell, helper, fake_Z0, output_layer=projection_layer)
 
         self.generated0, _, seq_len0 = tf.contrib.seq2seq.dynamic_decode(
             generator0, maximum_iterations=20)
