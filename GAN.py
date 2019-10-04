@@ -15,11 +15,16 @@ class GAN():
         for key in params:
             setattr(self, key, params[key])
         self.embeddings = load_embedding(self.vocab,
-                                         "/home/aida/Data/word_embeddings/GloVe/glove.6B.300d.txt",
+                                         "glove.6B.300d.txt",
                                          self.embedding_size)
         self.adversarial_build()
         self.target, self.domain = balance_data(self.target, self.domain)
-        batches = get_batches(self.target, self.domain, self.batch_size, vocab.index("<pad>"), vocab.index("<eos>"), vocab.index("<go>"))
+        batches = get_batches(self.target,
+                              self.domain,
+                              self.batch_size,
+                              vocab.index("<pad>"),
+                              vocab.index("<eos>"),
+                              vocab.index("<go>"))
         self.adversarial_train(batches)
 
 
@@ -27,23 +32,28 @@ class GAN():
         tf.reset_default_graph()
         self.keep_prob = tf.placeholder(tf.float32)
 
+        #[batch_size, length]
         self.X1 = tf.placeholder(tf.int32, [None, None], name="input_1")
         self.X0 = tf.placeholder(tf.int32, [None, None], name="input_0")
 
         self.maximum_length = 2 * self.X1.shape[1]
 
+        # [batch_size, length]
         self.decode_X1 = tf.placeholder(tf.int32, [None, None], name="decode_1")
         self.decode_X0 = tf.placeholder(tf.int32, [None, None], name="decode_0")
 
+        #[batch_size, length]
         self.output_X1 = tf.placeholder(tf.int32, [None, None], name="output1")
         self.output_X0 = tf.placeholder(tf.int32, [None, None], name="output_0")
 
         self.sequence_length1 = tf.placeholder(tf.int32, [None], name="seq_len_1")
         self.sequence_length0 = tf.placeholder(tf.int32, [None], name="seq_len_0")
 
+        # [batch_size]
         self.y1 = tf.placeholder(tf.float32, [None], name="label_1")
         self.y0 = tf.placeholder(tf.float32, [None], name="label_0")
 
+        # [batch_size, 1]
         y1 = tf.expand_dims(self.y1, 1)
         y0 = tf.expand_dims(self.y0, 1)
 
@@ -53,38 +63,45 @@ class GAN():
                                                     shape=[len(self.vocab), self.embedding_size])
         self.embedding_init = emb_W.assign(self.embedding_placeholder)
 
+        # [batch_size, sent_length, emb_size]
         self.embed1 = tf.nn.embedding_lookup(self.embedding_placeholder, self.X1)
         self.embed0 = tf.nn.embedding_lookup(self.embedding_placeholder, self.X0)
 
+        # [batch_size, sent_length, emb_size]
         self.embed_dec1 = tf.nn.embedding_lookup(self.embedding_placeholder, self.decode_X1)
         self.embed_dec0 = tf.nn.embedding_lookup(self.embedding_placeholder, self.decode_X0)
 
         self.y_size = self.hidden_size - self.z_size
 
+        # [batch_size, y_size]
         self.y1_real = tf.layers.dense(y1, self.y_size)
         self.y0_real = tf.layers.dense(y0, self.y_size)
 
         # don't know if it causes any problems
+        # [batch_size, y_size]
         self.y1_fake = self.y0_real
         self.y0_fake = self.y1_real
 
         batch_size = tf.shape(self.X0)[0]
 
-        init_y1 = tf.concat([self.y1_real, tf.zeros([batch_size, self.z_size])], 1)
-        init_y0 = tf.concat([self.y0_real, tf.zeros([batch_size, self.z_size])], 1)
-
+        print(self.z_size - self.y_size)
+        # [batch_size, z_size]
+        init_y1 = tf.concat([self.y1_real, tf.zeros([batch_size, (self.z_size - self.y_size)])], 1)
+        init_y0 = tf.concat([self.y0_real, tf.zeros([batch_size, (self.z_size - self.y_size)])], 1)
         # encoder
-        enc_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=int(self.hidden_size / 2),
+        enc_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=int(self.z_size / 2),
                                                 state_is_tuple=False)
         cell_drop = tf.nn.rnn_cell.DropoutWrapper(enc_cell,
                                                   input_keep_prob=self.keep_ratio)
-        self.enc_network = tf.contrib.rnn.MultiRNNCell([cell_drop] * self.num_layers, state_is_tuple=False)
-
+        self.enc_network = tf.contrib.rnn.MultiRNNCell([cell_drop] * self.num_layers,
+                                                       state_is_tuple=False)
         # generator
         gen_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=int(self.hidden_size / 2), state_is_tuple=False,
                                                 reuse=False)
-        gen_cell_drop = tf.nn.rnn_cell.DropoutWrapper(gen_cell, input_keep_prob=self.keep_ratio)
-        self.gen_network = tf.nn.rnn_cell.MultiRNNCell([gen_cell_drop] * self.num_layers, state_is_tuple=False)
+        gen_cell_drop = tf.nn.rnn_cell.DropoutWrapper(gen_cell,
+                                                      input_keep_prob=self.keep_ratio)
+        self.gen_network = tf.nn.rnn_cell.MultiRNNCell([gen_cell_drop] * self.num_layers,
+                                                       state_is_tuple=False)
 
         trans_cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=int(self.hidden_size / 2),
                                                 state_is_tuple=False,
@@ -109,10 +126,10 @@ class GAN():
         Z1_loss = tf.reduce_mean(self.Z1_xentropy)
         self.enc_loss = Z0_loss + Z1_loss
 
-        real_Z0 = tf.concat([self.y0_real, self.Z0[:, : -self.y_size]], 1)
-        real_Z1 = tf.concat([self.y1_real, self.Z1[:, : -self.y_size]], 1)
-        fake_Z0 = tf.concat([self.y0_fake, self.Z0[:, : -self.y_size]], 1)
-        fake_Z1 = tf.concat([self.y1_fake, self.Z1[:, : -self.y_size]], 1)
+        real_Z0 = tf.concat([self.y0_real, self.Z0], 1)
+        real_Z1 = tf.concat([self.y1_real, self.Z1], 1)
+        fake_Z0 = tf.concat([self.y0_fake, self.Z0], 1)
+        fake_Z1 = tf.concat([self.y1_fake, self.Z1], 1)
 
         self.gen1_outputs, self.gen1_state = tf.nn.dynamic_rnn(self.gen_network,
                                                                self.embed_dec1, dtype=tf.float32,
@@ -153,15 +170,25 @@ class GAN():
         self.generated1, _, seq_len1 = tf.contrib.seq2seq.dynamic_decode(
             generator1, maximum_iterations=20)
 
-        disc1_loss, gen1_loss = discriminator(self.logits1, self.generated1.rnn_output, self.filter_sizes, self.num_filters, self.keep_ratio, scope="disc1")
-        disc0_loss, gen0_loss = discriminator(self.logits0, self.generated0.rnn_output, self.filter_sizes, self.num_filters, self.keep_ratio, scope="disc0")
+        disc1_loss, gen1_loss, class1_loss = discriminator(self.logits1, self.generated1.rnn_output,
+                                              self.filter_sizes, self.num_filters,
+                                              self.keep_ratio, scope="disc1", label=1)
+        disc0_loss, gen0_loss, class0_loss = discriminator(self.logits0, self.generated0.rnn_output,
+                                              self.filter_sizes, self.num_filters,
+                                              self.keep_ratio, scope="disc0", label=0)
 
         self.disc_loss = disc0_loss + disc1_loss
         self.gen_loss = gen0_loss + gen1_loss
+        self.class_loss = class0_loss + class1_loss
 
-        self.enc_step = tf.train.AdamOptimizer(learning_rate=self.enc_learning_rate).minimize(-self.enc_loss)
-        self.gen_step = tf.train.AdamOptimizer(learning_rate=self.gen_learning_rate).minimize(self.gen_loss) #, var_list=self.gen_vars)  # G Train step
-        self.disc_step = tf.train.GradientDescentOptimizer(learning_rate=self.disc_learning_rate).minimize(self.disc_loss) #, var_list=self.disc_vars)  # D Train step
+        self.enc_step = tf.train.AdamOptimizer(learning_rate=self.enc_learning_rate)\
+            .minimize(-self.enc_loss)
+        self.gen_step = tf.train.AdamOptimizer(learning_rate=self.gen_learning_rate)\
+            .minimize(self.gen_loss) #, var_list=self.gen_vars)  # G Train step
+        self.disc_step = tf.train.GradientDescentOptimizer(learning_rate=self.disc_learning_rate)\
+            .minimize(self.disc_loss) #, var_list=self.disc_vars)  # D Train step
+        self.class_step = tf.train.AdamOptimizer(learning_rate=self.class_learning_rate)\
+            .minimize(self.class_loss)
 
     def adversarial_train(self, batches):
         init = tf.global_variables_initializer()
@@ -174,7 +201,7 @@ class GAN():
                       "recogniztion": list(),
                       "autoencoder": list()}
             while True:
-                disc_loss, gen_loss, rec_loss, enc_loss = 0, 0, 0, 0
+                disc_loss, gen_loss, rec_loss, enc_loss, cl_loss = 0, 0, 0, 0, 0
                 #_ = self.sess.run(self.embedding_init,
                 #                  feed_dict = {self.embedding_placeholder: self.embeddings})
                 for (target, domain) in batches:
@@ -194,31 +221,34 @@ class GAN():
                     }
 
                     if epoch < 50:
-                        _, _, rec_l, enc_l = self.sess.run(
-                            [self.rec_step, self.enc_step,
-                             self.rec_loss, self.enc_loss],
+                        _, _, _, rec_l, enc_l, cl_l = self.sess.run(
+                            [self.rec_step, self.enc_step, self.class_step
+                             self.rec_loss, self.enc_loss, self.class_loss],
                             feed_dict=feed_dict)
                         rec_loss += rec_l
                         enc_loss += enc_l
+                        cl_loss += cl_l
                     else:
-                        _, _, _, _, gen_l, disc_l, rec_l, enc_l = self.sess.run(
-                            [self.gen_step, self.disc_step, self.rec_step, self.enc_step,
-                             self.gen_loss, self.disc_loss, self.rec_loss, self.enc_loss],
+                        _, _, _, _, _, gen_l, disc_l, rec_l, enc_l, cl_l = self.sess.run(
+                            [self.gen_step, self.disc_step, self.rec_step, self.enc_step, self.class_step,
+                             self.gen_loss, self.disc_loss, self.rec_loss, self.enc_loss, self.class_loss],
                             feed_dict=feed_dict)
                         gen_loss += gen_l
                         disc_loss += disc_l
                         rec_loss += rec_l
                         enc_loss += enc_l
+                        cl_loss += cl_l
 
                 print("Iterations: %d\n Recognition loss: %.4f"
-                      "\n Autoencoder loss: %.4f\n Generator loss: %.4f"
-                      "\n Discriminator loss: %.4f" %
+                      "\n Autoencoder loss: %.4f\n Classification loss: %.4f\n"
+                      "Generator loss: %.4f\n Discriminator loss: %.4f" %
                       (epoch, rec_loss / len(batches), enc_loss / len(batches),
-                       gen_loss / len(batches), disc_loss / len(batches)))
+                       cl_loss / len(batches), gen_loss / len(batches), disc_loss / len(batches)))
                 losses["discriminator"].append(disc_loss / len(batches))
                 losses["autoencoder"].append(enc_loss / len(batches))
                 losses["generator"].append(gen_loss / len(batches))
                 losses["recogniztion"].append(rec_loss / len(batches))
+                losses["classification"].append(cl_loss / len(batches))
                 epoch += 1
                 if epoch == self.epochs:
                     # It's the output sentence of the auto-encoder

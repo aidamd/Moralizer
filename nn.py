@@ -12,9 +12,13 @@ def generator(Z, hidden_size, vocab_len, label):
     return out
 
 
-def discriminator(X_real, X_fake, filter_sizes, num_filters, keep_ratio, scope):
+def discriminator(X_real, X_fake, filter_sizes, num_filters, keep_ratio, scope, label):
     cnn_real = cnn(X_real, filter_sizes, num_filters, keep_ratio, scope)
     cnn_fake = cnn(X_fake, filter_sizes, num_filters, keep_ratio, scope, reuse=True)
+
+    class_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+        labels=tf.ones_like(cnn_real) if label == 1 else tf.zeros_like(cnn_real)
+        , logits=cnn_real))
 
     disc_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
         labels=tf.ones_like(cnn_real), logits=cnn_real)) + \
@@ -22,7 +26,7 @@ def discriminator(X_real, X_fake, filter_sizes, num_filters, keep_ratio, scope):
                  labels=tf.zeros_like(cnn_fake), logits=cnn_fake))
     gen_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
         labels=tf.ones_like(cnn_real), logits=cnn_fake))
-    return disc_loss, gen_loss
+    return disc_loss, gen_loss, class_loss
 
 def cnn(input, filter_sizes, num_filters, keep_ratio, scope, padding="VALID", reuse=False):
     dim = input.get_shape().as_list()[-1]

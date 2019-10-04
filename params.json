@@ -22,9 +22,9 @@
     "seed_size": 100,
     "use_labels": true,
     "transfer": "label",
-    "y_size": 100,
     "enc_learning_rate": 0.0001,
     "disc_learning_rate": 0.001,
     "gen_learning_rate": 0.001,
-    "rec_learning_rate": 0.01
+    "rec_learning_rate": 0.01,
+    "class_learning_rate": 0.01
 }
