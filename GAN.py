@@ -15,7 +15,7 @@ class GAN():
         for key in params:
             setattr(self, key, params[key])
         self.embeddings = load_embedding(self.vocab,
-                                         "glove.6B.300d.txt",
+                                         "/home/aida/Data/word_embeddings/GloVe/glove.6B.300d.txt",
                                          self.embedding_size)
         self.adversarial_build()
         self.target, self.domain = balance_data(self.target, self.domain)
@@ -199,7 +199,8 @@ class GAN():
             losses = {"discriminator": list(),
                       "generator": list(),
                       "recogniztion": list(),
-                      "autoencoder": list()}
+                      "autoencoder": list(),
+                      "classification": list()}
             while True:
                 disc_loss, gen_loss, rec_loss, enc_loss, cl_loss = 0, 0, 0, 0, 0
                 #_ = self.sess.run(self.embedding_init,
@@ -222,7 +223,7 @@ class GAN():
 
                     if epoch < 50:
                         _, _, _, rec_l, enc_l, cl_l = self.sess.run(
-                            [self.rec_step, self.enc_step, self.class_step
+                            [self.rec_step, self.enc_step, self.class_step,
                              self.rec_loss, self.enc_loss, self.class_loss],
                             feed_dict=feed_dict)
                         rec_loss += rec_l
@@ -239,9 +240,9 @@ class GAN():
                         enc_loss += enc_l
                         cl_loss += cl_l
 
-                print("Iterations: %d\n Recognition loss: %.4f"
-                      "\n Autoencoder loss: %.4f\n Classification loss: %.4f\n"
-                      "Generator loss: %.4f\n Discriminator loss: %.4f" %
+                print("Iterations: %d\nRecognition loss: %.4f"
+                      "\nAutoencoder loss: %.4f\nClassification loss: %.4f\n"
+                      "Generator loss: %.4f\nDiscriminator loss: %.4f" %
                       (epoch, rec_loss / len(batches), enc_loss / len(batches),
                        cl_loss / len(batches), gen_loss / len(batches), disc_loss / len(batches)))
                 losses["discriminator"].append(disc_loss / len(batches))
